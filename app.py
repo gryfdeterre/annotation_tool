@@ -170,6 +170,31 @@ def export():
         "errors": errors,
     })
 
+@app.route("/api/add_class", methods=["POST"])
+def add_class():
+    name = request.json.get("name", "").strip()
+    if not name:
+        return jsonify({"error": "Class name cannot be empty"}), 400
+    if name in state["classes"]:
+        return jsonify({"error": f'Class "{name}" already exists'}), 400
+    state["classes"].append(name)
+    return jsonify({"success": True, "classes": state["classes"]})
+
+@app.route("/api/delete_class", methods=["POST"])
+def delete_class():
+    name = request.json.get("name", "").strip()
+    if name not in state["classes"]:
+        return jsonify({"error": "Class not found"}), 400
+    # Count images that would be affected
+    affected = sum(1 for i in state["images"] if i["assigned_class"] == name)
+    state["classes"].remove(name)
+    # Unassign images that had this class
+    for img in state["images"]:
+        if img["assigned_class"] == name:
+            img["assigned_class"] = None
+            img["status"] = "pending"
+    return jsonify({"success": True, "classes": state["classes"], "affected": affected})
+
 @app.route("/api/reset", methods=["POST"])
 def reset():
     state.update({"input_folders": [], "output_folder": "", "classes": [],

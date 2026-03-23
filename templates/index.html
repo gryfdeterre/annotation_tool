@@ -416,6 +416,61 @@
     text-align: left;
   }
 
+  /* Add class row */
+  .add-class-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  #new-class-input {
+    flex: 1;
+    background: var(--bg);
+    border: 1px dashed var(--border);
+    border-radius: 7px;
+    padding: 8px 10px;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    outline: none;
+    transition: border-color .2s;
+  }
+  #new-class-input:focus { border-color: var(--accent); border-style: solid; }
+  #new-class-input::placeholder { color: var(--muted); }
+  #add-class-btn {
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--accent);
+    padding: 8px 12px;
+    border-radius: 7px;
+    cursor: pointer;
+    transition: all .15s;
+    flex-shrink: 0;
+  }
+  #add-class-btn:hover { background: var(--accent); color: #0e0e0f; }
+
+  .class-btn .del-btn {
+    margin-left: auto;
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 13px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity .15s, background .15s, color .15s;
+  }
+  .class-btn:hover .del-btn { opacity: 1; }
+  .class-btn .del-btn:hover { background: #ff474730; color: var(--accent2); }
+
   /* Keyboard hint */
   .kbd-hints {
     display: flex;
@@ -559,6 +614,11 @@
       <h3>Assign class</h3>
       <div id="class-list" style="margin-top:10px"></div>
       <button class="btn-skip" style="width:100%;margin-top:8px" onclick="skipImage()">⊘ Skip</button>
+      <div class="add-class-row">
+        <input id="new-class-input" type="text" placeholder="+ new class…" maxlength="40"
+          onkeydown="if(event.key==='Enter') addClassInline()">
+        <button id="add-class-btn" onclick="addClassInline()" title="Add class">+</button>
+      </div>
     </div>
 
     <hr class="divider">
@@ -660,10 +720,70 @@ function buildClassButtons() {
     btn.className = 'class-btn';
     btn.dataset.class = cls;
     btn.dataset.index = i;
-    btn.innerHTML = `${cls}${i < 9 ? `<span class="class-key">${i+1}</span>` : ''}`;
+
+    const label = document.createElement('span');
+    label.textContent = cls;
+    btn.appendChild(label);
+
+    if (i < 9) {
+      const key = document.createElement('span');
+      key.className = 'class-key';
+      key.textContent = i + 1;
+      btn.appendChild(key);
+    }
+
+    const del = document.createElement('button');
+    del.className = 'del-btn';
+    del.title = 'Delete class';
+    del.textContent = '✕';
+    del.onclick = (e) => { e.stopPropagation(); deleteClass(cls); };
+    btn.appendChild(del);
+
     btn.onclick = () => assignClass(cls);
     list.appendChild(btn);
   });
+}
+
+async function addClassInline() {
+  const input = document.getElementById('new-class-input');
+  const name = input.value.trim();
+  if (!name) return;
+
+  const res = await fetch('/api/add_class', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({name})
+  });
+  const data = await res.json();
+  if (!res.ok) { showToast(data.error); return; }
+
+  classes = data.classes;
+  buildClassButtons();
+  input.value = '';
+  input.focus();
+  showToast(`Class "${name}" added`);
+}
+
+async function deleteClass(name) {
+  const res = await fetch('/api/delete_class', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({name})
+  });
+  const data = await res.json();
+  if (!res.ok) { showToast(data.error); return; }
+
+  classes = data.classes;
+  buildClassButtons();
+
+  // Refresh current image status in case it was using this class
+  loadImage(currentIndex);
+
+  const msg = data.affected > 0
+    ? `Class "${name}" deleted — ${data.affected} image(s) reset to pending`
+    : `Class "${name}" deleted`;
+  showToast(msg);
+  await updateStats();
 }
 
 // ── IMAGE LOADING ──
