@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Annotator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0e0e0f;
+    --surface: #17171a;
+    --surface2: #1f1f23;
+    --border: #2a2a30;
+    --accent: #e8ff47;
+    --accent2: #ff6b47;
+    --text: #f0f0f0;
+    --muted: #6b6b78;
+    --done: #47ff9a;
+    --skip: #ff9447;
+    --radius: 10px;
+  }
+
+  html, body { height: 100%; }
+  body {
+    font-family: 'DM Mono', monospace;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── HEADER ── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 28px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  header h1 {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 20px;
+    letter-spacing: -0.5px;
+    color: var(--accent);
+  }
+  header h1 span { color: var(--text); font-weight: 400; }
+
+  #progress-bar-wrap {
+    flex: 1;
+    max-width: 340px;
+    margin: 0 24px;
+  }
+  #progress-track {
+    background: var(--border);
+    border-radius: 99px;
+    height: 6px;
+    overflow: hidden;
+  }
+  #progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--done));
+    border-radius: 99px;
+    transition: width 0.4s cubic-bezier(.4,0,.2,1);
+    width: 0%;
+  }
+  #progress-label {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 5px;
+    text-align: right;
+  }
+
+  .btn-reset {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 6px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all .2s;
+  }
+  .btn-reset:hover { border-color: var(--accent2); color: var(--accent2); }
+
+  /* ── SCREENS ── */
+  .screen { display: none; flex: 1; }
+  .screen.active { display: flex; }
+
+  /* ── SETUP SCREEN ── */
+  #setup-screen {
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+  }
+  .setup-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 40px;
+    width: 100%;
+    max-width: 560px;
+  }
+  .setup-card h2 {
+    font-family: 'Syne', sans-serif;
+    font-size: 26px;
+    font-weight: 800;
+    margin-bottom: 8px;
+  }
+  .setup-card p.sub {
+    color: var(--muted);
+    font-size: 13px;
+    margin-bottom: 32px;
+  }
+  .field { margin-bottom: 20px; }
+  .field label {
+    display: block;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .field input, .field textarea {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    outline: none;
+    transition: border-color .2s;
+    resize: vertical;
+  }
+  .field input:focus, .field textarea:focus { border-color: var(--accent); }
+  .field .hint { font-size: 11px; color: var(--muted); margin-top: 5px; }
+
+  .btn-primary {
+    font-family: 'Syne', sans-serif;
+    font-weight: 600;
+    font-size: 15px;
+    background: var(--accent);
+    color: #0e0e0f;
+    border: none;
+    border-radius: 8px;
+    padding: 12px 28px;
+    cursor: pointer;
+    transition: all .15s;
+    width: 100%;
+    margin-top: 8px;
+  }
+  .btn-primary:hover { filter: brightness(1.1); transform: translateY(-1px); }
+  .btn-primary:active { transform: translateY(0); }
+
+  .error-msg {
+    background: #ff474720;
+    border: 1px solid #ff4747;
+    color: #ff7070;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 13px;
+    margin-top: 16px;
+    display: none;
+  }
+
+  /* ── ANNOTATE SCREEN ── */
+  #annotate-screen {
+    flex-direction: row;
+    height: calc(100vh - 57px);
+  }
+
+  /* Left panel */
+  .img-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    position: relative;
+    background: var(--bg);
+  }
+
+  #img-container {
+    width: 100%;
+    max-height: calc(100vh - 200px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+  #main-img {
+    max-width: 100%;
+    max-height: calc(100vh - 200px);
+    object-fit: contain;
+    border-radius: 10px;
+    box-shadow: 0 20px 60px rgba(0,0,0,.5);
+    transition: opacity .2s;
+  }
+  .img-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .img-meta {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-top: 14px;
+    font-size: 12px;
+    color: var(--muted);
+    max-width: 100%;
+    overflow: hidden;
+  }
+  .img-meta .filename { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .nav-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+  }
+  .btn-nav {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 16px;
+    border-radius: 7px;
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .btn-nav:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-nav:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  /* Right panel */
+  .ctrl-panel {
+    width: 280px;
+    border-left: 1px solid var(--border);
+    background: var(--surface);
+    display: flex;
+    flex-direction: column;
+    padding: 24px;
+    gap: 20px;
+    overflow-y: auto;
+  }
+
+  .ctrl-panel h3 {
+    font-family: 'Syne', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+  }
+
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 99px;
+    background: var(--surface2);
+  }
+  .status-badge.done { color: var(--done); }
+  .status-badge.skipped { color: var(--skip); }
+  .status-badge.pending { color: var(--muted); }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+  #class-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .class-btn {
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 11px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    text-align: left;
+    transition: all .15s;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    position: relative;
+    overflow: hidden;
+  }
+  .class-btn::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: transparent;
+    transition: background .15s;
+  }
+  .class-btn:hover { border-color: var(--accent); background: var(--bg); }
+  .class-btn:hover::before { background: var(--accent); }
+  .class-btn.active { border-color: var(--accent); background: #e8ff4715; color: var(--accent); }
+  .class-btn.active::before { background: var(--accent); }
+  .class-key {
+    font-size: 10px;
+    background: var(--border);
+    color: var(--muted);
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+
+  .btn-skip {
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 10px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all .15s;
+    text-align: left;
+  }
+  .btn-skip:hover { border-color: var(--skip); color: var(--skip); }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .stat-box {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+  }
+  .stat-box .val {
+    font-family: 'Syne', sans-serif;
+    font-size: 22px;
+    font-weight: 800;
+  }
+  .stat-box .lbl { font-size: 10px; color: var(--muted); margin-top: 2px; text-transform: uppercase; letter-spacing: .5px; }
+  .stat-box.acc .val { color: var(--done); }
+  .stat-box.skp .val { color: var(--skip); }
+
+  .btn-export {
+    font-family: 'Syne', sans-serif;
+    font-weight: 600;
+    font-size: 14px;
+    background: var(--accent);
+    color: #0e0e0f;
+    border: none;
+    border-radius: 8px;
+    padding: 12px;
+    cursor: pointer;
+    transition: all .15s;
+    width: 100%;
+  }
+  .btn-export:hover { filter: brightness(1.1); }
+  .btn-export:disabled { opacity: 0.5; cursor: not-allowed; filter: none; }
+
+  /* ── EXPORT SCREEN ── */
+  #export-screen {
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+  }
+  .export-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 40px;
+    width: 100%;
+    max-width: 500px;
+    text-align: center;
+  }
+  .export-card .icon { font-size: 48px; margin-bottom: 16px; }
+  .export-card h2 { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 24px; margin-bottom: 8px; }
+  .export-card p { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
+  .class-summary { margin: 20px 0; text-align: left; }
+  .class-summary-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    margin-bottom: 4px;
+  }
+  .class-summary-item:nth-child(odd) { background: var(--surface2); }
+  .class-summary-item .count { color: var(--accent); font-weight: 500; }
+  .output-path {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 12px;
+    color: var(--muted);
+    word-break: break-all;
+    margin-bottom: 24px;
+    text-align: left;
+  }
+
+  /* Keyboard hint */
+  .kbd-hints {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .kbd { font-size: 10px; background: var(--surface2); border: 1px solid var(--border); padding: 3px 7px; border-radius: 4px; color: var(--muted); }
+
+  /* Toast */
+  #toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 20px;
+    border-radius: 99px;
+    font-size: 13px;
+    transition: transform .3s cubic-bezier(.4,0,.2,1);
+    z-index: 999;
+    pointer-events: none;
+  }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+
+  /* Loading */
+  #img-loading {
+    display: none;
+    position: absolute;
+    inset: 0;
+    background: var(--bg);
+    border-radius: 10px;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  #img-loading.visible { display: flex; }
+
+  /* Jump input */
+  #jump-wrap {
+    display: flex;
+    gap: 6px;
+  }
+  #jump-input {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 7px 10px;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    outline: none;
+  }
+  #jump-input:focus { border-color: var(--accent); }
+  #jump-btn {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 7px 12px;
+    border-radius: 7px;
+    cursor: pointer;
+  }
+  #jump-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .divider { border: none; border-top: 1px solid var(--border); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Annot<span>ator</span></h1>
+  <div id="progress-bar-wrap" style="display:none">
+    <div id="progress-track"><div id="progress-fill"></div></div>
+    <div id="progress-label">0 / 0</div>
+  </div>
+  <button class="btn-reset" onclick="resetAll()">↺ New session</button>
+</header>
+
+<!-- SETUP SCREEN -->
+<div id="setup-screen" class="screen active">
+  <div class="setup-card">
+    <h2>Set up your session</h2>
+    <p class="sub">Configure your image sources, output destination, and class labels.</p>
+
+    <div class="field">
+      <label>Input folders (one per line)</label>
+      <textarea id="input-folders" rows="3" placeholder="/path/to/images&#10;/another/folder"></textarea>
+      <div class="hint">Subfolders are scanned recursively.</div>
+    </div>
+
+    <div class="field">
+      <label>Output folder</label>
+      <input type="text" id="output-folder" placeholder="/path/to/output">
+      <div class="hint">Will be created if it doesn't exist.</div>
+    </div>
+
+    <div class="field">
+      <label>Classes (one per line)</label>
+      <textarea id="classes" rows="4" placeholder="cat&#10;dog&#10;bird"></textarea>
+      <div class="hint">First 9 classes get number key shortcuts (1–9).</div>
+    </div>
+
+    <button class="btn-primary" onclick="startSession()">Start annotating →</button>
+    <div class="error-msg" id="setup-error"></div>
+  </div>
+</div>
+
+<!-- ANNOTATE SCREEN -->
+<div id="annotate-screen" class="screen">
+  <div class="img-panel">
+    <div id="img-container">
+      <div id="img-loading" class="visible">Loading…</div>
+      <img id="main-img" style="display:none" alt="current image">
+    </div>
+    <div class="img-meta">
+      <span id="img-filename" class="filename">—</span>
+      <span id="img-index" style="flex-shrink:0">—</span>
+    </div>
+    <div class="nav-row">
+      <button class="btn-nav" id="btn-prev" onclick="navigate(-1)">← Prev</button>
+      <button class="btn-nav" id="btn-next" onclick="navigate(1)">Next →</button>
+    </div>
+  </div>
+
+  <div class="ctrl-panel">
+    <div>
+      <h3>Status</h3>
+      <div id="status-badge" class="status-badge pending" style="margin-top:8px">
+        <span class="dot"></span><span id="status-text">Pending</span>
+      </div>
+    </div>
+
+    <hr class="divider">
+
+    <div>
+      <h3>Assign class</h3>
+      <div id="class-list" style="margin-top:10px"></div>
+      <button class="btn-skip" style="width:100%;margin-top:8px" onclick="skipImage()">⊘ Skip</button>
+    </div>
+
+    <hr class="divider">
+
+    <div>
+      <h3>Jump to</h3>
+      <div id="jump-wrap" style="margin-top:8px">
+        <input id="jump-input" type="number" min="1" placeholder="#">
+        <button id="jump-btn" onclick="jumpTo()">Go</button>
+      </div>
+    </div>
+
+    <hr class="divider">
+
+    <div>
+      <h3>Progress</h3>
+      <div class="stats-grid" style="margin-top:10px">
+        <div class="stat-box acc"><div class="val" id="stat-done">0</div><div class="lbl">Annotated</div></div>
+        <div class="stat-box skp"><div class="val" id="stat-skip">0</div><div class="lbl">Skipped</div></div>
+        <div class="stat-box" style="grid-column:span 2"><div class="val" id="stat-total">0</div><div class="lbl">Total images</div></div>
+      </div>
+    </div>
+
+    <hr class="divider">
+
+    <div>
+      <h3>Shortcuts</h3>
+      <div class="kbd-hints" style="margin-top:8px">
+        <span class="kbd">1–9 → class</span>
+        <span class="kbd">S → skip</span>
+        <span class="kbd">← → nav</span>
+      </div>
+    </div>
+
+    <hr class="divider">
+
+    <button class="btn-export" id="btn-export" onclick="doExport()">Export dataset</button>
+  </div>
+</div>
+
+<!-- EXPORT SCREEN -->
+<div id="export-screen" class="screen">
+  <div class="export-card">
+    <div class="icon">✅</div>
+    <h2>Export complete</h2>
+    <p>Your annotated images have been saved.</p>
+    <div class="output-path" id="export-path"></div>
+    <div class="class-summary" id="class-summary"></div>
+    <button class="btn-primary" onclick="goBackToAnnotate()">← Back to annotating</button>
+    <button class="btn-reset" style="width:100%;margin-top:10px" onclick="resetAll()">Start new session</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+let currentIndex = 0;
+let totalImages = 0;
+let classes = [];
+
+// ── SETUP ──
+async function startSession() {
+  const folders = document.getElementById('input-folders').value
+    .split('\n').map(s => s.trim()).filter(Boolean);
+  const output = document.getElementById('output-folder').value.trim();
+  const cls = document.getElementById('classes').value
+    .split('\n').map(s => s.trim()).filter(Boolean);
+
+  const errEl = document.getElementById('setup-error');
+  errEl.style.display = 'none';
+
+  try {
+    const res = await fetch('/api/setup', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({input_folders: folders, output_folder: output, classes: cls})
+    });
+    const data = await res.json();
+    if (!res.ok) { errEl.textContent = data.error; errEl.style.display = 'block'; return; }
+
+    classes = cls;
+    totalImages = data.total;
+    currentIndex = 0;
+    buildClassButtons();
+    showScreen('annotate-screen');
+    document.getElementById('progress-bar-wrap').style.display = 'flex';
+    loadImage(0);
+  } catch(e) {
+    errEl.textContent = 'Connection error: ' + e.message;
+    errEl.style.display = 'block';
+  }
+}
+
+function buildClassButtons() {
+  const list = document.getElementById('class-list');
+  list.innerHTML = '';
+  classes.forEach((cls, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'class-btn';
+    btn.dataset.class = cls;
+    btn.dataset.index = i;
+    btn.innerHTML = `${cls}${i < 9 ? `<span class="class-key">${i+1}</span>` : ''}`;
+    btn.onclick = () => assignClass(cls);
+    list.appendChild(btn);
+  });
+}
+
+// ── IMAGE LOADING ──
+async function loadImage(index) {
+  if (index < 0 || index >= totalImages) return;
+  currentIndex = index;
+
+  const loading = document.getElementById('img-loading');
+  const img = document.getElementById('main-img');
+  loading.classList.add('visible');
+  img.style.display = 'none';
+
+  try {
+    const res = await fetch(`/api/image/${index}`);
+    const data = await res.json();
+    if (!res.ok) { showToast('Error loading image'); return; }
+
+    img.src = data.data;
+    img.onload = () => {
+      loading.classList.remove('visible');
+      img.style.display = 'block';
+    };
+    img.onerror = () => {
+      loading.classList.remove('visible');
+      loading.textContent = 'Failed to load image';
+      loading.classList.add('visible');
+    };
+
+    document.getElementById('img-filename').textContent = data.filename;
+    document.getElementById('img-index').textContent = `${index + 1} / ${data.total}`;
+
+    updateStatusBadge(data.status, data.assigned_class);
+    highlightClassBtn(data.assigned_class);
+
+    document.getElementById('btn-prev').disabled = index === 0;
+    document.getElementById('btn-next').disabled = index === totalImages - 1;
+  } catch(e) {
+    showToast('Error: ' + e.message);
+  }
+}
+
+function updateStatusBadge(status, cls) {
+  const badge = document.getElementById('status-badge');
+  const text = document.getElementById('status-text');
+  badge.className = 'status-badge ' + status;
+  if (status === 'done') text.textContent = cls;
+  else if (status === 'skipped') text.textContent = 'Skipped';
+  else text.textContent = 'Pending';
+}
+
+function highlightClassBtn(cls) {
+  document.querySelectorAll('.class-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.class === cls);
+  });
+}
+
+// ── ANNOTATION ──
+async function assignClass(cls) {
+  const res = await fetch('/api/annotate', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({index: currentIndex, class: cls})
+  });
+  const data = await res.json();
+  if (!res.ok) { showToast(data.error); return; }
+
+  updateStatusBadge('done', cls);
+  highlightClassBtn(cls);
+  updateStats(data.done);
+
+  // Auto-advance to next unannotated
+  setTimeout(() => loadImage(data.next_index), 150);
+}
+
+async function skipImage() {
+  const res = await fetch('/api/annotate', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({index: currentIndex, skip: true})
+  });
+  const data = await res.json();
+  if (!res.ok) return;
+  updateStatusBadge('skipped', null);
+  highlightClassBtn(null);
+  updateStats(data.done);
+  setTimeout(() => loadImage(data.next_index), 150);
+}
+
+function navigate(dir) {
+  loadImage(currentIndex + dir);
+}
+
+function jumpTo() {
+  const val = parseInt(document.getElementById('jump-input').value);
+  if (!isNaN(val)) loadImage(val - 1);
+}
+
+// ── STATS ──
+async function updateStats(done) {
+  const res = await fetch('/api/state');
+  const data = await res.json();
+  document.getElementById('stat-done').textContent = data.done;
+  document.getElementById('stat-skip').textContent = data.skipped;
+  document.getElementById('stat-total').textContent = data.total;
+  const pct = data.total ? (data.done / data.total * 100) : 0;
+  document.getElementById('progress-fill').style.width = pct + '%';
+  document.getElementById('progress-label').textContent = `${data.done} / ${data.total} annotated`;
+}
+
+// ── EXPORT ──
+async function doExport() {
+  const btn = document.getElementById('btn-export');
+  btn.disabled = true;
+  btn.textContent = 'Exporting…';
+  try {
+    const res = await fetch('/api/export', {method: 'POST'});
+    const data = await res.json();
+    if (!res.ok) { showToast(data.error || 'Export failed'); return; }
+
+    document.getElementById('export-path').textContent = data.output_folder;
+    const summary = document.getElementById('class-summary');
+    summary.innerHTML = Object.entries(data.summary)
+      .map(([k,v]) => `<div class="class-summary-item"><span>${k}</span><span class="count">${v} images</span></div>`)
+      .join('');
+    showScreen('export-screen');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Export dataset';
+  }
+}
+
+function goBackToAnnotate() {
+  showScreen('annotate-screen');
+}
+
+// ── RESET ──
+async function resetAll() {
+  await fetch('/api/reset', {method: 'POST'});
+  document.getElementById('progress-bar-wrap').style.display = 'none';
+  showScreen('setup-screen');
+}
+
+// ── UTILS ──
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+// ── KEYBOARD ──
+document.addEventListener('keydown', e => {
+  const screen = document.querySelector('.screen.active');
+  if (!screen || screen.id !== 'annotate-screen') return;
+  if (['INPUT','TEXTAREA'].includes(document.activeElement.tagName)) return;
+
+  if (e.key === 'ArrowLeft') { e.preventDefault(); navigate(-1); }
+  else if (e.key === 'ArrowRight') { e.preventDefault(); navigate(1); }
+  else if (e.key === 's' || e.key === 'S') skipImage();
+  else if (e.key >= '1' && e.key <= '9') {
+    const i = parseInt(e.key) - 1;
+    if (i < classes.length) assignClass(classes[i]);
+  }
+});
+
+// Init stats on load
+updateStats();
+</script>
+</body>
+</html>
