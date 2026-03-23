@@ -51,8 +51,16 @@ def get_state():
 @app.route("/api/setup", methods=["POST"])
 def setup():
     data = request.json
-    folders = [f.strip() for f in data.get("input_folders", []) if f.strip()]
-    output = data.get("output_folder", "").strip()
+    def clean_path(p):
+        p = p.strip()
+        while len(p) >= 2 and p[0] in ('"', "'") and p[-1] in ('"', "'"):
+            p = p[1:-1].strip()
+        return p
+
+    raw_folders = data.get("input_folders", [])
+    folders = [clean_path(f) for f in raw_folders if f.strip()]
+    folders = [f for f in folders if f]
+    output = clean_path(data.get("output_folder", ""))
     classes = [c.strip() for c in data.get("classes", []) if c.strip()]
 
     missing = [f for f in folders if not Path(f).exists()]
